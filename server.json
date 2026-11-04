@@ -1,0 +1,13 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.balkanpilot/eu-tender-intelligence",
+  "title": "EU Tender Intelligence",
+  "description": "Free MCP tool for searching EU public tenders by country, CPV code and date using official TED data.",
+  "version": "0.2.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://eu-tender-intelligence.balkanpilot.workers.dev/mcp"
+    }
+  ]
+}
