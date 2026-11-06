@@ -1,5 +1,5 @@
 /**
- * EU Tender Intelligence — free v0.2 MCP prototype.
+ * EU Tender Intelligence — free v0.3 MCP prototype.
  * Source: Publications Office of the EU / TED Search API v3.
  * No API keys, payments, or user accounts. Free, read-only MCP.
  */
@@ -139,7 +139,7 @@ const PAGE = `<!doctype html>
   </style>
 </head>
 <body><main>
-  <header><h1>EU Tender Intelligence</h1><p>Free v0.2 demo — search European public procurement notices from official TED data. No account required.</p></header>
+  <header><h1>EU Tender Intelligence</h1><p>Free v0.3 demo — search European public procurement notices from official TED data. No account required.</p></header>
   <section class="panel">
     <form id="form">
       <div><label for="country">Buyer country</label><select id="country" name="country"><option value="ROU">Romania</option><option value="DEU">Germany</option><option value="FRA">France</option><option value="ITA">Italy</option><option value="ESP">Spain</option><option value="POL">Poland</option><option value="HUN">Hungary</option></select></div>
@@ -178,7 +178,7 @@ f.addEventListener('submit',async e=>{
 
 const OPENAPI = {
   openapi: '3.0.3',
-  info: { title: 'EU Tender Intelligence API', version: '0.2.0', description: 'Free, non-commercial prototype using TED Search API v3.' },
+  info: { title: 'EU Tender Intelligence API', version: '0.3.0', description: 'Free, non-commercial prototype using TED Search API v3.' },
   paths: {
     '/api/health': { get: { summary: 'Service health check', responses: { '200': { description: 'OK' } } } },
     '/api/search': {
@@ -201,7 +201,7 @@ const OPENAPI = {
 // Modern protocol version 2026-07-28 with backward compatibility for 2025 clients.
 const MCP_VERSION = '2026-07-28';
 const MCP_VERSIONS = [MCP_VERSION, '2025-11-25', '2025-06-18', '2025-03-26'];
-const MCP_SERVER = { name: 'eu-tender-intelligence', version: '0.2.0' };
+const MCP_SERVER = { name: 'eu-tender-intelligence', version: '0.3.0' };
 const MCP_TOOL = {
   name: 'search_tenders',
   title: 'Search EU public tenders',
@@ -218,6 +218,30 @@ const MCP_TOOL = {
   },
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
 };
+
+// Deterministic matching is deliberately transparent: no paid model, no
+// eligibility claims, and no claim to rank every notice in TED. We inspect
+// up to 25 newest notices matching the selected country/CPV.
+const MATCH_TOOL = {
+  name: 'match_tenders',
+  title: 'Match EU tenders to business keywords',
+  description: 'Rank up to 25 recent TED notices using optional CPV and business keywords. Returns transparent rule-based scores, not eligibility decisions. Searches only a recent sample, not all TED notices. Free, read-only.',
+  inputSchema: {
+    type: 'object', additionalProperties: false,
+    properties: {
+      country: { type: 'string', pattern: '^[A-Z]{3}$', default: 'ROU', description: 'Buyer country ISO-3, e.g. ROU, DEU, FRA.' },
+      cpv: { type: 'string', pattern: '^[0-9]{8}$', description: 'Optional 8-digit CPV filter. The TED query is restricted to this CPV.' },
+      keywords: { type: 'array', minItems: 1, maxItems: 8, items: { type: 'string', minLength: 2, maxLength: 64 }, description: 'Business services or products, e.g. ["cybersecurity", "network"]. Keywords are only used for local ranking, not inserted into TED queries.' },
+      days: { type: 'integer', minimum: 1, maximum: 365, default: 30 },
+      scan_limit: { type: 'integer', minimum: 1, maximum: 25, default: 25, description: 'Maximum recent TED notices to inspect, 1–25.' },
+      max_results: { type: 'integer', minimum: 1, maximum: 10, default: 5, description: 'Top scored notices to return.' },
+      scope: { type: 'string', enum: ['ACTIVE', 'ALL'], default: 'ACTIVE' }
+    },
+    anyOf: [{ required: ['keywords'] }, { required: ['cpv'] }]
+  },
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
+};
+const MCP_TOOLS = [MCP_TOOL, MATCH_TOOL];
 
 function rpc(id, property, value, status = 200) {
   return json({ jsonrpc: '2.0', id, [property]: value }, status);
@@ -270,6 +294,96 @@ async function runTenderTool(args, originalRequest, fetchTED) {
   const dataResponse = await handleRequest(new Request(url), fetchTED);
   const data = await dataResponse.json();
   return { isError: !dataResponse.ok, data };
+}
+
+// Validate exact parameter names and types before calling the upstream API.
+export function validateMatchArgs(args) {
+  if (!isObject(args)) throw new Error('arguments must be a JSON object.');
+  const allowed = new Set(['country', 'cpv', 'keywords', 'days', 'scan_limit', 'max_results', 'scope']);
+  if (Object.keys(args).some(k => !allowed.has(k))) throw new Error('Unknown match_tenders argument.');
+  const keywords = args.keywords === undefined ? [] : args.keywords;
+  if (!Array.isArray(keywords) || keywords.length > 8 || keywords.some(
+    k => typeof k !== 'string' || k.trim().length < 2 || k.length > 64
+  )) throw new Error('keywords must contain 1–8 strings of 2–64 characters when supplied.');
+  const cpv = args.cpv === undefined ? null : args.cpv;
+  if (cpv !== null && (typeof cpv !== 'string' || !/^\d{8}$/.test(cpv))) {
+    throw new Error('cpv must contain exactly 8 digits.');
+  }
+  if (keywords.length === 0 && !cpv) throw new Error('Provide keywords or cpv to match tenders.');
+  const country = args.country === undefined ? 'ROU' : args.country;
+  const scope = args.scope === undefined ? 'ACTIVE' : args.scope;
+  if (typeof country !== 'string' || !/^[A-Z]{3}$/.test(country)) {
+    throw new Error('country must be a three-letter uppercase ISO-3 code.');
+  }
+  if (typeof scope !== 'string' || !['ACTIVE', 'ALL'].includes(scope)) throw new Error('scope must be ACTIVE or ALL.');
+  for (const key of ['days', 'scan_limit', 'max_results']) {
+    if (args[key] !== undefined && (!Number.isSafeInteger(args[key]) || typeof args[key] !== 'number')) {
+      throw new Error(key + ' must be an integer.');
+    }
+  }
+  const days = args.days ?? 30;
+  const scanLimit = args.scan_limit ?? 25;
+  const maxResults = args.max_results ?? 5;
+  if (days < 1 || days > 365) throw new Error('days must be between 1 and 365.');
+  if (scanLimit < 1 || scanLimit > 25) throw new Error('scan_limit must be between 1 and 25.');
+  if (maxResults < 1 || maxResults > 10) throw new Error('max_results must be between 1 and 10.');
+  return {
+    country, cpv, days, scope, scan_limit: scanLimit, max_results: maxResults,
+    keywords: [...new Set(keywords.map(k => k.trim()).filter(Boolean))]
+  };
+}
+
+function fold(s) {
+  return String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+// A score is an explainable heuristic, NOT an assessed chance of winning a bid.
+export function scoreNotice(notice, params) {
+  const title = fold(notice.title);
+  const buyer = fold(notice.buyer);
+  const codes = Array.isArray(notice.cpv) ? notice.cpv : [];
+  const reasons = [];
+  const matchedKeywords = [];
+  let score = 0;
+  if (params.cpv) {
+    if (codes.includes(params.cpv)) { score += 60; reasons.push('Exact CPV code match'); }
+    else if (codes.some(c => c.startsWith(params.cpv.slice(0, 5)))) { score += 40; reasons.push('Related CPV category'); }
+    else if (codes.some(c => c.startsWith(params.cpv.slice(0, 2)))) { score += 15; reasons.push('Same broad CPV division'); }
+  }
+  for (const keyword of params.keywords) {
+    const needle = fold(keyword);
+    if (title.includes(needle)) { score += 20; matchedKeywords.push(keyword); }
+    else if (buyer.includes(needle)) { score += 5; matchedKeywords.push(keyword); }
+  }
+  if (matchedKeywords.length) reasons.push('Matched business keywords in notice title or buyer');
+  return { score: Math.min(score, 100), matched_keywords: matchedKeywords, reasons };
+}
+
+async function runMatchTool(args, originalRequest, fetchTED) {
+  let params;
+  try { params = validateMatchArgs(args); }
+  catch (err) { return { isError: true, message: err.message }; }
+  const searchURL = new URL('/api/search', originalRequest.url);
+  searchURL.searchParams.set('country', params.country);
+  searchURL.searchParams.set('days', String(params.days));
+  searchURL.searchParams.set('limit', String(params.scan_limit));
+  searchURL.searchParams.set('scope', params.scope);
+  if (params.cpv) searchURL.searchParams.set('cpv', params.cpv);
+  const response = await handleRequest(new Request(searchURL), fetchTED);
+  const data = await response.json();
+  if (!response.ok) return { isError: true, data };
+  const matches = data.results.map(n => ({ ...n, ...scoreNotice(n, params) }))
+    .filter(n => n.score > 0)
+    .sort((a, b) => b.score - a.score || String(b.publication_date || '').localeCompare(String(a.publication_date || '')))
+    .slice(0, params.max_results);
+  return { isError: false, data: {
+    matches, returned_count: matches.length, inspected_count: data.count,
+    total_from_ted: data.total_from_ted, filters: params,
+    ranking_method: 'Rule-based CPV + keyword ranking, not AI or bid eligibility analysis.',
+    coverage_note: 'Only the most recently published notices in one TED page were inspected. A zero-match response is not proof there are no suitable tenders.',
+    deadline_note: 'TED ACTIVE status does not guarantee a bid deadline is still open. Verify source_url before bidding.',
+    source: 'TED — Publications Office of the European Union'
+  } };
 }
 
 export async function handleMcp(request, fetchTED = fetch) {
@@ -327,7 +441,7 @@ export async function handleMcp(request, fetchTED = fetch) {
       protocolVersion: MCP_VERSIONS.includes(body.params?.protocolVersion) && body.params.protocolVersion !== MCP_VERSION
         ? body.params.protocolVersion : '2025-11-25',
       capabilities: { tools: { listChanged: false } }, serverInfo: MCP_SERVER,
-      instructions: 'Free tool for searching TED procurement notices. Verify deadlines in the official notices.'
+      instructions: 'Free tools for searching and ranking recent TED procurement notices. Scores do not determine bid eligibility. Verify original notices and deadlines.'
     });
   }
   if (body.method === 'server/discover' && modern) {
@@ -335,7 +449,7 @@ export async function handleMcp(request, fetchTED = fetch) {
     return rpc(id, 'result', {
       resultType: 'complete', supportedVersions: MCP_VERSIONS,
       capabilities: { tools: { listChanged: false } },
-      instructions: 'Search public TED procurement notices. Read-only operations.',
+      instructions: 'Search and rank recent public TED procurement notices. Read-only operations; scoring is heuristic.',
       ttlMs: 3600000, cacheScope: 'public', _meta: modernMeta()
     });
   }
@@ -346,19 +460,22 @@ export async function handleMcp(request, fetchTED = fetch) {
   if (body.method === 'tools/list') {
     usageEvent('mcp', 'tools_list', 'ok', 200);
     return rpc(id, 'result', modern
-      ? { resultType: 'complete', tools: [MCP_TOOL], ttlMs: 3600000, cacheScope: 'public', _meta: modernMeta() }
-      : { tools: [MCP_TOOL] });
+      ? { resultType: 'complete', tools: MCP_TOOLS, ttlMs: 3600000, cacheScope: 'public', _meta: modernMeta() }
+      : { tools: MCP_TOOLS });
   }
   if (body.method === 'tools/call') {
-    if (body.params?.name !== MCP_TOOL.name) {
+    if (![MCP_TOOL.name, MATCH_TOOL.name].includes(body.params?.name)) {
       usageEvent('mcp', 'tools_call', 'unknown_tool', 400);
       return rpcError(id, -32602, 'Unknown tool: ' + String(body.params?.name), 400);
     }
     let outcome;
-    try { outcome = await runTenderTool(body.params.arguments || {}, request, fetchTED); }
-    catch (_) { outcome = { isError: true, message: 'Internal error while searching TED.' }; }
+    try {
+      outcome = body.params.name === MATCH_TOOL.name
+        ? await runMatchTool(body.params.arguments || {}, request, fetchTED)
+        : await runTenderTool(body.params.arguments || {}, request, fetchTED);
+    } catch (_) { outcome = { isError: true, message: 'Internal error while processing TED notices.' }; }
     const payload = outcome.data || { error: outcome.message };
-    usageEvent('mcp', 'search_tenders', outcome.isError ? 'error' : 'ok', 200);
+    usageEvent('mcp', body.params.name, outcome.isError ? 'error' : 'ok', 200);
     const result = {
       ...(modern ? { resultType: 'complete' } : {}),
       content: [{ type: 'text', text: JSON.stringify(payload) }],
@@ -385,15 +502,15 @@ export async function handleRequest(request, fetchTED = fetch) {
     });
   }
   if (url.pathname === '/mcp-info') return json({
-    name: 'EU Tender Intelligence MCP', version: '0.2.0',
+    name: 'EU Tender Intelligence MCP', version: '0.3.0',
     endpoint: new URL('/mcp', request.url).href,
     transport: 'Streamable HTTP POST (JSON-RPC)',
     supported_protocol_versions: MCP_VERSIONS,
-    tools: [MCP_TOOL.name],
+    tools: MCP_TOOLS.map(tool => tool.name),
     note: 'MCP endpoint: use POST JSON-RPC. For browser-friendly information, open /mcp-info instead of /mcp.'
   });
   if (url.pathname === '/openapi.json') return json(OPENAPI);
-  if (url.pathname === '/api/health') return json({ status: 'ok', version: '0.2.0', source: 'TED Search API v3' });
+  if (url.pathname === '/api/health') return json({ status: 'ok', version: '0.3.0', source: 'TED Search API v3' });
   if (url.pathname !== '/api/search') return json({ error: 'Route not found.' }, 404);
 
   let params;
