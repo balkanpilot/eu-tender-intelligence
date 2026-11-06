@@ -1,7 +1,7 @@
 /**
- * EU Tender Intelligence — prototip gratuit v0.2 cu MCP.
- * Sursa: Publications Office of the EU / TED Search API v3.
- * Fără chei API, fără plăți și fără conturi de utilizator. MCP gratuit, doar citire.
+ * EU Tender Intelligence — free v0.2 MCP prototype.
+ * Source: Publications Office of the EU / TED Search API v3.
+ * No API keys, payments, or user accounts. Free, read-only MCP.
  */
 const TED_ENDPOINT = 'https://api.ted.europa.eu/v3/notices/search';
 const FIELDS = [
@@ -29,7 +29,7 @@ function json(data, status = 200, extra = {}) {
   });
 }
 
-function pickText(value, preferred = ['ron', 'eng', 'fra', 'deu']) {
+function pickText(value, preferred = ['eng', 'ron', 'fra', 'deu']) {
   if (value == null) return null;
   if (typeof value === 'string' || typeof value === 'number') return String(value);
   if (Array.isArray(value)) {
@@ -84,10 +84,10 @@ export function normalizeNotice(notice) {
 }
 
 function positiveInt(value, name, min, max) {
-  if (!/^\d+$/.test(String(value))) throw new Error(`${name} trebuie să fie un număr întreg.`);
+  if (!/^\d+$/.test(String(value))) throw new Error(`${name} must be an integer.`);
   const number = Number(value);
   if (!Number.isSafeInteger(number) || number < min || number > max) {
-    throw new Error(`${name} trebuie să fie între ${min} și ${max}.`);
+    throw new Error(`${name} must be between ${min} and ${max}.`);
   }
   return number;
 }
@@ -98,9 +98,9 @@ export function parseParams(url) {
   const days = positiveInt(url.searchParams.get('days') || DEFAULTS.days, 'days', 1, 365);
   const limit = positiveInt(url.searchParams.get('limit') || DEFAULTS.limit, 'limit', 1, 25);
   const scope = (url.searchParams.get('scope') || DEFAULTS.scope).toUpperCase();
-  if (!/^[A-Z]{3}$/.test(country)) throw new Error('country trebuie să fie un cod ISO-3, ex. ROU.');
-  if (cpv !== null && !/^\d{8}$/.test(cpv)) throw new Error('cpv trebuie să conțină exact 8 cifre.');
-  if (!['ACTIVE', 'ALL'].includes(scope)) throw new Error('scope trebuie să fie ACTIVE sau ALL.');
+  if (!/^[A-Z]{3}$/.test(country)) throw new Error('country must be a three-letter ISO-3 code, e.g. ROU.');
+  if (cpv !== null && !/^\d{8}$/.test(cpv)) throw new Error('cpv must contain exactly 8 digits.');
+  if (!['ACTIVE', 'ALL'].includes(scope)) throw new Error('scope must be ACTIVE or ALL.');
   return { country, cpv, days, limit, scope };
 }
 
@@ -120,10 +120,10 @@ export function buildTedRequest(params, now = new Date()) {
 }
 
 const PAGE = `<!doctype html>
-<html lang="ro">
+<html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>EU Tender Intelligence · Demo gratuit</title>
+  <title>EU Tender Intelligence · Free demo</title>
   <style>
     :root{color-scheme:light;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
     *{box-sizing:border-box}body{margin:0;background:#f3f6fa;color:#192a3a}
@@ -139,51 +139,51 @@ const PAGE = `<!doctype html>
   </style>
 </head>
 <body><main>
-  <header><h1>EU Tender Intelligence</h1><p>Prototip v0.2 — găsește anunțuri europene de achiziții publice din sursa oficială TED. Gratuit, fără cont.</p></header>
+  <header><h1>EU Tender Intelligence</h1><p>Free v0.2 demo — search European public procurement notices from official TED data. No account required.</p></header>
   <section class="panel">
     <form id="form">
-      <div><label for="country">Țara cumpărătorului</label><select id="country" name="country"><option value="ROU">România</option><option value="DEU">Germania</option><option value="FRA">Franța</option><option value="ITA">Italia</option><option value="ESP">Spania</option><option value="POL">Polonia</option><option value="HUN">Ungaria</option></select></div>
-      <div><label for="days">Ultimele zile</label><select id="days" name="days"><option value="7">7</option><option value="30" selected>30</option><option value="90">90</option><option value="365">365</option></select></div>
-      <div><label for="cpv">CPV (opțional)</label><input id="cpv" name="cpv" placeholder="ex. 72000000" pattern="[0-9]{8}" maxlength="8"></div>
-      <div><label for="limit">Rezultate</label><select id="limit" name="limit"><option>5</option><option selected>10</option><option>20</option></select></div>
-      <div class="wide"><button id="search" type="submit">Caută în TED</button></div>
+      <div><label for="country">Buyer country</label><select id="country" name="country"><option value="ROU">Romania</option><option value="DEU">Germany</option><option value="FRA">France</option><option value="ITA">Italy</option><option value="ESP">Spain</option><option value="POL">Poland</option><option value="HUN">Hungary</option></select></div>
+      <div><label for="days">Published within</label><select id="days" name="days"><option value="7">7</option><option value="30" selected>30</option><option value="90">90</option><option value="365">365</option></select></div>
+      <div><label for="cpv">CPV (optional)</label><input id="cpv" name="cpv" placeholder="e.g. 72000000" pattern="[0-9]{8}" maxlength="8"></div>
+      <div><label for="limit">Max results</label><select id="limit" name="limit"><option>5</option><option selected>10</option><option>20</option></select></div>
+      <div class="wide"><button id="search" type="submit">Search TED</button></div>
     </form>
-    <p class="hint">„ACTIVE” în TED nu garantează că termenul de depunere a ofertelor nu a expirat. Verifică întotdeauna anunțul oficial.</p>
+    <p class="hint">TED status ACTIVE does not guarantee that bidding is still open. Always verify the original notice.</p>
   </section>
-  <p id="status" role="status">Alege filtrele și apasă „Caută în TED”.</p><section id="results"></section>
-  <p class="hint">Acces API pentru programe: <a href="/mcp-info">/mcp-info</a> · <a href="/openapi.json">/openapi.json</a> · <a href="/api/health">/api/health</a> · Date: <a href="https://ted.europa.eu/">TED — Publications Office of the EU</a>.</p>
+  <p id="status" role="status">Choose filters and click “Search TED”.</p><section id="results"></section>
+  <p class="hint">Developer API: <a href="/mcp-info">/mcp-info</a> · <a href="/openapi.json">/openapi.json</a> · <a href="/api/health">/api/health</a> · Data source: <a href="https://ted.europa.eu/">TED — Publications Office of the EU</a>.</p>
 </main>
 <script>
 const f=document.getElementById('form'),b=document.getElementById('search'),s=document.getElementById('status'),out=document.getElementById('results');
 function el(tag,text,cls){const x=document.createElement(tag);if(text)x.textContent=text;if(cls)x.className=cls;return x;}
 f.addEventListener('submit',async e=>{
-  e.preventDefault();b.disabled=true;s.textContent='Se caută în TED...';out.replaceChildren();
+  e.preventDefault();b.disabled=true;s.textContent='Searching TED...';out.replaceChildren();
   const p=new URLSearchParams(new FormData(f));p.set('scope','ACTIVE');
   try{
     const r=await fetch('/api/search?'+p.toString());const d=await r.json();
-    if(!r.ok)throw new Error(d.error||'Eroare necunoscută');
-    s.textContent='Rezultate afișate: '+d.count+' · Totalul raportat de TED: '+(d.total_from_ted??'necunoscut');
-    if(!d.results.length)out.append(el('p','Niciun anunț găsit. Încearcă o perioadă mai lungă sau fără CPV.'));
+    if(!r.ok)throw new Error(d.error||'Unknown error');
+    s.textContent='Results displayed: '+d.count+' · Total reported by TED: '+(d.total_from_ted??'unknown');
+    if(!d.results.length)out.append(el('p','No notices found. Try a longer date range or remove the CPV filter.'));
     for(const n of d.results){
-      const card=el('article',null,'result');card.append(el('h2',n.title||'Anunț fără titlu'));
-      card.append(el('p','Cumpărător: '+(n.buyer||'Nespecificat')));
-      card.append(el('p','Publicat: '+(n.publication_date||'—')+' · Termen: '+(n.deadline_date||'neprecizat')));
-      card.append(el('p','CPV: '+(n.cpv.length?n.cpv.join(', '):'neprecizat')));
-      if(n.source_url){const a=el('a','Vezi anunțul oficial TED');a.href=n.source_url;a.target='_blank';a.rel='noopener noreferrer';card.append(a);}
+      const card=el('article',null,'result');card.append(el('h2',n.title||'Untitled notice'));
+      card.append(el('p','Buyer: '+(n.buyer||'Not specified')));
+      card.append(el('p','Published: '+(n.publication_date||'—')+' · Deadline: '+(n.deadline_date||'not specified')));
+      card.append(el('p','CPV: '+(n.cpv.length?n.cpv.join(', '):'not specified')));
+      if(n.source_url){const a=el('a','View official TED notice');a.href=n.source_url;a.target='_blank';a.rel='noopener noreferrer';card.append(a);}
       out.append(card);
     }
-  }catch(err){s.textContent='Eroare: '+err.message;}finally{b.disabled=false;}
+  }catch(err){s.textContent='Error: '+err.message;}finally{b.disabled=false;}
 });
 </script></body></html>`;
 
 const OPENAPI = {
   openapi: '3.0.3',
-  info: { title: 'EU Tender Intelligence API', version: '0.2.0', description: 'Prototip gratuit, necomercial, bazat pe TED Search API v3.' },
+  info: { title: 'EU Tender Intelligence API', version: '0.2.0', description: 'Free, non-commercial prototype using TED Search API v3.' },
   paths: {
-    '/api/health': { get: { summary: 'Verificare serviciu', responses: { '200': { description: 'OK' } } } },
+    '/api/health': { get: { summary: 'Service health check', responses: { '200': { description: 'OK' } } } },
     '/api/search': {
       get: {
-        summary: 'Caută anunțuri TED după țara cumpărătorului, CPV și perioada publicării',
+        summary: 'Search TED notices by buyer country, CPV code and publication period',
         parameters: [
           { name: 'country', in: 'query', schema: { type: 'string', default: 'ROU', pattern: '^[A-Z]{3}$' } },
           { name: 'cpv', in: 'query', schema: { type: 'string', pattern: '^[0-9]{8}$' } },
@@ -191,14 +191,14 @@ const OPENAPI = {
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 10, minimum: 1, maximum: 25 } },
           { name: 'scope', in: 'query', schema: { type: 'string', enum: ['ACTIVE', 'ALL'], default: 'ACTIVE' } }
         ],
-        responses: { '200': { description: 'Anunțuri normalizate în JSON' }, '400': { description: 'Parametri invalizi' }, '502': { description: 'TED indisponibil sau eroare amonte' } }
+        responses: { '200': { description: 'Normalized procurement notices in JSON' }, '400': { description: 'Invalid parameters' }, '502': { description: 'TED is unavailable or returned an upstream error' } }
       }
     }
   }
 };
 
-// ---- MCP: integrare experimentală, fără dependențe și fără costuri ----
-// Versiune modernă 2026-07-28 + compatibilitate cu clienții legacy 2025.
+// ---- MCP: experimental, dependency-free and no additional service costs ----
+// Modern protocol version 2026-07-28 with backward compatibility for 2025 clients.
 const MCP_VERSION = '2026-07-28';
 const MCP_VERSIONS = [MCP_VERSION, '2025-11-25', '2025-06-18', '2025-03-26'];
 const MCP_SERVER = { name: 'eu-tender-intelligence', version: '0.2.0' };
@@ -235,23 +235,35 @@ function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+// Minimal aggregate-friendly telemetry. Never log tender search terms, IP, headers,
+// request identifiers, user-agent, tokens or complete request/response bodies.
+function usageEvent(channel, action, outcome, status) {
+  console.log({
+    event: 'eti_usage',
+    channel,
+    action,
+    outcome,
+    status
+  });
+}
+
 async function runTenderTool(args, originalRequest, fetchTED) {
-  if (!isObject(args)) return { isError: true, message: 'arguments trebuie să fie un obiect JSON.' };
+  if (!isObject(args)) return { isError: true, message: 'arguments must be a JSON object.' };
   const allowed = new Set(['country', 'cpv', 'days', 'limit', 'scope']);
   if (Object.keys(args).some(k => !allowed.has(k))) {
-    return { isError: true, message: 'Argument necunoscut. Sunt permise doar country, cpv, days, limit, scope.' };
+    return { isError: true, message: 'Unknown argument. Only country, cpv, days, limit, scope are allowed.' };
   }
   const url = new URL('/api/search', originalRequest.url);
   for (const [key, value] of Object.entries(args)) {
     if (value === null || typeof value === 'object' || typeof value === 'boolean') {
-      return { isError: true, message: `Argument invalid: ${key}.` };
+      return { isError: true, message: `Invalid argument: ${key}.` };
     }
     if (key === 'days' || key === 'limit') {
       if (typeof value !== 'number' || !Number.isInteger(value)) {
-        return { isError: true, message: `${key} trebuie să fie un număr întreg.` };
+        return { isError: true, message: `${key} must be an integer.` };
       }
     } else if (typeof value !== 'string') {
-      return { isError: true, message: `${key} trebuie să fie un text.` };
+      return { isError: true, message: `${key} must be a string.` };
     }
     url.searchParams.set(key, String(value));
   }
@@ -262,28 +274,29 @@ async function runTenderTool(args, originalRequest, fetchTED) {
 
 export async function handleMcp(request, fetchTED = fetch) {
   if (request.method !== 'POST') {
-    return json({ error: 'Endpoint MCP: folosește POST JSON-RPC. Pentru informații, deschide /mcp-info.' }, 405, { Allow: 'POST' });
+    usageEvent('mcp', 'invalid_http_method', 'rejected', 405);
+    return json({ error: 'MCP endpoint: use POST JSON-RPC. Open /mcp-info for details.' }, 405, { Allow: 'POST' });
   }
-  // Protecție DNS rebinding: clienții server-to-server pot să nu trimită Origin.
+  // DNS rebinding protection: server-to-server clients may omit Origin.
   const origin = request.headers.get('origin');
-  if (origin && origin !== new URL(request.url).origin) return rpcError(null, -32000, 'Origin nepermis.', 403);
+  if (origin && origin !== new URL(request.url).origin) return rpcError(null, -32000, 'Origin is not allowed.', 403);
   if (!(request.headers.get('content-type') || '').toLowerCase().includes('application/json')) {
-    return rpcError(null, -32600, 'Content-Type trebuie să fie application/json.', 415);
+    return rpcError(null, -32600, 'Content-Type must be application/json.', 415);
   }
   const accept = request.headers.get('accept') || '';
   if (!accept.includes('application/json') || !accept.includes('text/event-stream')) {
-    return rpcError(null, -32600, 'Accept trebuie să includă application/json și text/event-stream.', 406);
+    return rpcError(null, -32600, 'Accept must include application/json and text/event-stream.', 406);
   }
   const declaredSize = Number(request.headers.get('content-length') || 0);
-  if (declaredSize > 16384) return rpcError(null, -32600, 'Cerere prea mare.', 413);
+  if (declaredSize > 16384) return rpcError(null, -32600, 'Request body too large.', 413);
   let body;
   try {
     const raw = await request.text();
-    if (raw.length > 16384) return rpcError(null, -32600, 'Cerere prea mare.', 413);
+    if (raw.length > 16384) return rpcError(null, -32600, 'Request body too large.', 413);
     body = JSON.parse(raw);
-  } catch (_) { return rpcError(null, -32700, 'JSON invalid.'); }
+  } catch (_) { return rpcError(null, -32700, 'Invalid JSON.'); }
   if (!isObject(body) || body.jsonrpc !== '2.0' || typeof body.method !== 'string' || (body.id !== undefined && typeof body.id !== 'string' && typeof body.id !== 'number')) {
-    return rpcError(null, -32600, 'Cerere JSON-RPC invalidă.');
+    return rpcError(null, -32600, 'Invalid JSON-RPC request.');
   }
 
   const id = body.id ?? null;
@@ -292,51 +305,60 @@ export async function handleMcp(request, fetchTED = fetch) {
   if (modern) {
     const meta = body.params?._meta;
     if (!isObject(meta) || meta['io.modelcontextprotocol/protocolVersion'] !== MCP_VERSION || !isObject(meta['io.modelcontextprotocol/clientCapabilities'])) {
-      return rpcError(id, -32602, 'Lipsesc metadatele MCP obligatorii.', 400);
+      return rpcError(id, -32602, 'Required MCP metadata is missing.', 400);
     }
     if (request.headers.get('mcp-method') !== body.method) {
-      return rpcError(id, -32600, 'Mcp-Method nu corespunde metodei.', 400);
+      return rpcError(id, -32600, 'Mcp-Method does not match the request method.', 400);
     }
     if (body.method === 'tools/call' && request.headers.get('mcp-name') !== body.params?.name) {
-      return rpcError(id, -32600, 'Mcp-Name nu corespunde numelui instrumentului.', 400);
+      return rpcError(id, -32600, 'Mcp-Name does not match the tool name.', 400);
     }
   } else if (version && !MCP_VERSIONS.includes(version)) {
     return rpcError(id, -32022, 'Unsupported protocol version.', 400, { supported: MCP_VERSIONS, requested: version });
   }
-  // Notificările legacy nu necesită răspuns JSON-RPC.
-  if (body.id === undefined) return new Response(null, { status: 202 });
+  // Legacy notifications do not require a JSON-RPC response.
+  if (body.id === undefined) {
+    if (body.method === 'notifications/initialized') usageEvent('mcp', 'initialized_notification', 'ok', 202);
+    return new Response(null, { status: 202 });
+  }
   if (body.method === 'initialize' && !modern) {
+    usageEvent('mcp', 'initialize', 'ok', 200);
     return rpc(id, 'result', {
       protocolVersion: MCP_VERSIONS.includes(body.params?.protocolVersion) && body.params.protocolVersion !== MCP_VERSION
         ? body.params.protocolVersion : '2025-11-25',
       capabilities: { tools: { listChanged: false } }, serverInfo: MCP_SERVER,
-      instructions: 'Instrument gratuit pentru a căuta anunțuri TED. Verifică termenele pe site-ul oficial.'
+      instructions: 'Free tool for searching TED procurement notices. Verify deadlines in the official notices.'
     });
   }
   if (body.method === 'server/discover' && modern) {
+    usageEvent('mcp', 'server_discover', 'ok', 200);
     return rpc(id, 'result', {
       resultType: 'complete', supportedVersions: MCP_VERSIONS,
       capabilities: { tools: { listChanged: false } },
-      instructions: 'Caută anunțuri publice TED, fără operațiuni de scriere.',
+      instructions: 'Search public TED procurement notices. Read-only operations.',
       ttlMs: 3600000, cacheScope: 'public', _meta: modernMeta()
     });
   }
   if (body.method === 'ping') {
+    usageEvent('mcp', 'ping', 'ok', 200);
     return rpc(id, 'result', modern ? { _meta: modernMeta() } : {});
   }
   if (body.method === 'tools/list') {
+    usageEvent('mcp', 'tools_list', 'ok', 200);
     return rpc(id, 'result', modern
       ? { resultType: 'complete', tools: [MCP_TOOL], ttlMs: 3600000, cacheScope: 'public', _meta: modernMeta() }
       : { tools: [MCP_TOOL] });
   }
   if (body.method === 'tools/call') {
     if (body.params?.name !== MCP_TOOL.name) {
-      return rpcError(id, -32602, 'Instrument necunoscut: ' + String(body.params?.name), 400);
+      usageEvent('mcp', 'tools_call', 'unknown_tool', 400);
+      return rpcError(id, -32602, 'Unknown tool: ' + String(body.params?.name), 400);
     }
     let outcome;
     try { outcome = await runTenderTool(body.params.arguments || {}, request, fetchTED); }
-    catch (_) { outcome = { isError: true, message: 'Eroare internă la căutarea în TED.' }; }
+    catch (_) { outcome = { isError: true, message: 'Internal error while searching TED.' }; }
     const payload = outcome.data || { error: outcome.message };
+    usageEvent('mcp', 'search_tenders', outcome.isError ? 'error' : 'ok', 200);
     const result = {
       ...(modern ? { resultType: 'complete' } : {}),
       content: [{ type: 'text', text: JSON.stringify(payload) }],
@@ -345,13 +367,14 @@ export async function handleMcp(request, fetchTED = fetch) {
     };
     return rpc(id, 'result', result);
   }
-  return rpcError(id, -32601, 'Metodă MCP necunoscută.', 404);
+  usageEvent('mcp', 'unknown_method', 'rejected', 404);
+  return rpcError(id, -32601, 'Unknown MCP method.', 404);
 }
 
 export async function handleRequest(request, fetchTED = fetch) {
   const url = new URL(request.url);
   if (url.pathname === '/mcp') return handleMcp(request, fetchTED);
-  if (request.method !== 'GET') return json({ error: 'Metodă neacceptată. Folosește GET.' }, 405, { allow: 'GET' });
+  if (request.method !== 'GET') return json({ error: 'Method not allowed. Use GET.' }, 405, { allow: 'GET' });
   if (url.pathname === '/') {
     return new Response(PAGE, {
       headers: {
@@ -367,11 +390,11 @@ export async function handleRequest(request, fetchTED = fetch) {
     transport: 'Streamable HTTP POST (JSON-RPC)',
     supported_protocol_versions: MCP_VERSIONS,
     tools: [MCP_TOOL.name],
-    note: 'Endpoint MCP: POST JSON-RPC. În browser deschide /mcp-info, nu /mcp.'
+    note: 'MCP endpoint: use POST JSON-RPC. For browser-friendly information, open /mcp-info instead of /mcp.'
   });
   if (url.pathname === '/openapi.json') return json(OPENAPI);
   if (url.pathname === '/api/health') return json({ status: 'ok', version: '0.2.0', source: 'TED Search API v3' });
-  if (url.pathname !== '/api/search') return json({ error: 'Ruta nu există.' }, 404);
+  if (url.pathname !== '/api/search') return json({ error: 'Route not found.' }, 404);
 
   let params;
   try { params = parseParams(url); }
@@ -391,16 +414,16 @@ export async function handleRequest(request, fetchTED = fetch) {
       });
     } finally { clearTimeout(timeout); }
   } catch (_) {
-    return json({ error: 'TED nu a răspuns. Încearcă din nou mai târziu.' }, 502);
+    return json({ error: 'TED did not respond. Please try again later.' }, 502);
   }
   if (!response.ok) {
-    return json({ error: `TED a returnat codul HTTP ${response.status}. Verifică filtrele sau încearcă mai târziu.` }, 502);
+    return json({ error: `TED returned HTTP ${response.status}. Check your filters or try again later.` }, 502);
   }
   let raw;
   try { raw = await response.json(); }
-  catch (_) { return json({ error: 'TED a returnat un răspuns invalid.' }, 502); }
+  catch (_) { return json({ error: 'TED returned an invalid response.' }, 502); }
   if (!raw || !Array.isArray(raw.notices)) {
-    return json({ error: 'Formatul răspunsului TED s-a schimbat.' }, 502);
+    return json({ error: 'The TED response format has changed.' }, 502);
   }
   const results = raw.notices.map(normalizeNotice);
   return json({
@@ -409,11 +432,17 @@ export async function handleRequest(request, fetchTED = fetch) {
     filters: params,
     ted_query: tedRequest.query,
     source: 'TED — Publications Office of the European Union',
-    caveat: 'Statusul ACTIVE nu confirmă automat că termenul de ofertare este deschis.',
+    caveat: 'ACTIVE status does not guarantee the tender is still open for bids.',
     results
   });
 }
 
 export default {
-  async fetch(request) { return handleRequest(request); }
+  async fetch(request) {
+    const response = await handleRequest(request);
+    if (new URL(request.url).pathname === '/api/search') {
+      usageEvent('rest', 'search_tenders', response.ok ? 'ok' : 'error', response.status);
+    }
+    return response;
+  }
 };
